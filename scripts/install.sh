@@ -10,7 +10,7 @@ fi
 [ -n "$TAGS" ] || { echo "no release tags found"; exit 1; }
 for T in $TAGS; do
   echo "trying $T ..."
-  if pip install -q --force-reinstall "git+$REPO@$T" && python -c "import asynchttp, sys; print('asynchttp', asynchttp.__version__, 'OK')"; then
+  if pip install -q --force-reinstall "git+$REPO@$T" && python -I -c "import asynchttp; print('asynchttp', asynchttp.__version__, 'OK')"; then
     echo "installed $T"; exit 0
   fi
   echo "$T failed, falling back"
