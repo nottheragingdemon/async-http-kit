@@ -1,4 +1,4 @@
-import asyncio, json as _json, time, urllib.error, urllib.request
+import asyncio, json as _json, random, time, urllib.error, urllib.request
 from dataclasses import dataclass, field
 
 
@@ -10,6 +10,7 @@ class Req:
     json: object = None
     data: bytes | None = None
     timeout: float = 30.0
+    retries: int = 0                 # extra attempts after the first (429, 5xx and network errors)
 
 
 @dataclass
@@ -20,6 +21,7 @@ class Response:
     body: bytes = b""
     elapsed: float = 0.0
     error: str | None = None
+    attempts: int = 1
 
     @property
     def ok(self):
@@ -54,20 +56,39 @@ def _as_req(x) -> Req:
     return x if isinstance(x, Req) else Req(x)
 
 
-async def request(req, **overrides) -> Response:
-    """Send one request (a URL string or a Req). Never raises for HTTP status codes or network errors: check .ok / .error."""
+RETRY_STATUS = {429, 500, 502, 503, 504}
+
+
+def _delay(resp: Response, attempt: int, backoff: float) -> float:
+    ra = resp.headers.get("retry-after", "")
+    if ra.strip().isdigit():                       # the server said how long to wait
+        return min(float(ra), 60.0)
+    return backoff * (2 ** attempt) * (0.5 + random.random())   # exponential backoff with jitter
+
+
+async def request(req, *, backoff: float = 0.5, **overrides) -> Response:
+    """Send one request (a URL string or a Req). Never raises for HTTP status codes or network errors: check .ok / .error.
+    With retries=N it tries again (up to N more times) on 429, 5xx and network errors, waiting Retry-After or an exponential backoff."""
     r = _as_req(req)
     if overrides:
         r = Req(**{**r.__dict__, **overrides})
-    return await asyncio.to_thread(_send, r)
+    resp = await asyncio.to_thread(_send, r)
+    for attempt in range(r.retries):
+        if resp.status != 0 and resp.status not in RETRY_STATUS:
+            break
+        await asyncio.sleep(_delay(resp, attempt, backoff))
+        resp = await asyncio.to_thread(_send, r)
+        resp.attempts = attempt + 2
+    return resp
 
 
-async def gather(requests, concurrency: int = 10) -> list[Response]:
-    """Run many requests in parallel (at most `concurrency` at a time). Results keep the input order."""
+async def gather(requests, concurrency: int = 10, retries: int | None = None, backoff: float = 0.5) -> list[Response]:
+    """Run many requests in parallel (at most `concurrency` at a time). Results keep the input order.
+    `retries` (if given) overrides each request's own retry count."""
     sem = asyncio.Semaphore(concurrency)
 
     async def one(x):
         async with sem:
-            return await request(x)
+            return await request(x, backoff=backoff, **({} if retries is None else {"retries": retries}))
 
     return list(await asyncio.gather(*(one(x) for x in requests)))
