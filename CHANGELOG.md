@@ -1,7 +1,8 @@
 # Changelog
 
-## Unreleased (fix for 0.3.1)
+## 0.3.1
 - `scripts/install.sh`: the smoke test now runs in isolated mode, so it checks the installed package and not a copy in the current folder. Before, running the script from inside a clone printed the clone's version instead of the version it had just installed.
+- Behaviour change from 0.3.0: none (the library code is unchanged).
 
 ## 0.3.0
 - `gather(..., per_host=N)`: at most N simultaneous requests to the same host, so one server is never flooded while others run at full speed.
