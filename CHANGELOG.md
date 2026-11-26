@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.0
+- Retries: `Req(retries=N)` / `gather(..., retries=N)` retry on 429, 5xx and network errors, waiting for `Retry-After` or an exponential backoff with jitter. `Response.attempts` says how many tries were used.
+- Behaviour change from 0.1.0: none unless `retries` is set (default 0).
+
 ## 0.1.0
 - `request()` and `gather()`: run many requests in parallel with a concurrency limit; results keep input order.
 - HTTP error statuses and network errors never raise: check `Response.ok` / `Response.error`.

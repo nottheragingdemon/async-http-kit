@@ -36,6 +36,20 @@ class Core(unittest.TestCase):
         d = r.json()
         self.assertEqual((d["method"], d["body"], d["ctype"]), ("POST", '{"a": 1}', "application/json"))
 
+    def test_retry_until_success(self):
+        r = asyncio.run(request(Req(f"{self.base}/flaky?k=r1&fail=2", retries=3), backoff=0.01))
+        self.assertTrue(r.ok); self.assertEqual(r.attempts, 3)
+
+    def test_gives_up_and_does_not_retry_4xx(self):
+        a = asyncio.run(request(Req(f"{self.base}/flaky?k=r2&fail=9", retries=1), backoff=0.01))
+        self.assertEqual((a.status, a.attempts), (503, 2))
+        b = asyncio.run(request(Req(f"{self.base}/missing", retries=3), backoff=0.01))
+        self.assertEqual((b.status, b.attempts), (404, 1))
+
+    def test_gather_retries_in_parallel(self):
+        rs = asyncio.run(gather([f"{self.base}/flaky?k=g{i}&fail=1" for i in range(5)], retries=2, backoff=0.01))
+        self.assertTrue(all(r.ok and r.attempts == 2 for r in rs))
+
 
 if __name__ == "__main__":
     unittest.main()
