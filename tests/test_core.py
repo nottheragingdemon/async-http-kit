@@ -50,6 +50,19 @@ class Core(unittest.TestCase):
         rs = asyncio.run(gather([f"{self.base}/flaky?k=g{i}&fail=1" for i in range(5)], retries=2, backoff=0.01))
         self.assertTrue(all(r.ok and r.attempts == 2 for r in rs))
 
+    def test_per_host_limit(self):
+        t = time.monotonic()
+        asyncio.run(gather([f"{self.base}/slow?d=0.3&i={i}" for i in range(4)], concurrency=4, per_host=2))
+        self.assertGreaterEqual(time.monotonic() - t, 0.55)   # 2 rounds of 0.3 s, though 4 slots were free
+
+    def test_cli(self):
+        import subprocess
+        out = subprocess.run([sys.executable, "-m", "asynchttp", "-c", "2", f"{self.base}/ok", f"{self.base}/missing"],
+                             capture_output=True, text=True, cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                             env={**os.environ, "NO_PROXY": "127.0.0.1"})
+        self.assertEqual(out.returncode, 1)
+        self.assertIn("200", out.stdout); self.assertIn("404", out.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
