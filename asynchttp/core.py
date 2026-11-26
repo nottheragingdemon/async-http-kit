@@ -1,4 +1,5 @@
 import asyncio, json as _json, random, time, urllib.error, urllib.request
+from urllib.parse import urlsplit
 from dataclasses import dataclass, field
 
 
@@ -82,13 +83,21 @@ async def request(req, *, backoff: float = 0.5, **overrides) -> Response:
     return resp
 
 
-async def gather(requests, concurrency: int = 10, retries: int | None = None, backoff: float = 0.5) -> list[Response]:
-    """Run many requests in parallel (at most `concurrency` at a time). Results keep the input order.
-    `retries` (if given) overrides each request's own retry count."""
+async def gather(requests, concurrency: int = 10, retries: int | None = None, backoff: float = 0.5, per_host: int | None = None) -> list[Response]:
+    """Run many requests in parallel (at most `concurrency` at a time, and at most `per_host` at once to the same host).
+    Results keep the input order. `retries` (if given) overrides each request's own retry count."""
     sem = asyncio.Semaphore(concurrency)
+    hosts: dict[str, asyncio.Semaphore] = {}
 
     async def one(x):
-        async with sem:
-            return await request(x, backoff=backoff, **({} if retries is None else {"retries": retries}))
+        host_sem = hosts.setdefault(urlsplit(_as_req(x).url).netloc, asyncio.Semaphore(per_host)) if per_host else None
+        if host_sem:
+            await host_sem.acquire()
+        try:
+            async with sem:
+                return await request(x, backoff=backoff, **({} if retries is None else {"retries": retries}))
+        finally:
+            if host_sem:
+                host_sem.release()
 
     return list(await asyncio.gather(*(one(x) for x in requests)))
