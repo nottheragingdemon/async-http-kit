@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.0
+- `asynchttp.aio.AsyncHTTPClient`: an aiohttp-based client that runs many GET/POST requests at once from synchronous code (`client.execute([...])`), returning status, parsed body, headers and any error per request. Optional: install with `pip install "asynchttp[aiohttp]"`; the rest of the kit still needs only the standard library. Used by WarEraTracker's collector.
+- The package version now matches the release (0.3.1 still reported 0.3.0).
+- Behaviour change from 0.3.1: none for existing code.
+
 ## 0.3.1
 - `scripts/install.sh`: the smoke test now runs in isolated mode, so it checks the installed package and not a copy in the current folder. Before, running the script from inside a clone printed the clone's version instead of the version it had just installed.
 - Behaviour change from 0.3.0: none (the library code is unchanged).
